@@ -7,6 +7,7 @@
 #include "SPI.h"
 #include "LED.h"
 #include "debug.h"
+#include "draw.h"
 
 #pragma config FNOSC = SPLL 
 #pragma config FSOSCEN = OFF    
@@ -47,12 +48,14 @@ unsigned char buffer_flag = 0;
 int morph_counter = 0;
 int fabulous_counter = 0;
 
-#define speed_history_size 4
+#define speed_history_size 10
 
 unsigned long int speed_history[speed_history_size];
 unsigned int speed_history_i = 0;
 unsigned long int magnet_counter = 0, speed_counter = 0, omega = 0, raw_omega;
 unsigned char magnet_flag = 1;
+
+volatile unsigned long int time = 0.0;
 
 void __ISR_AT_VECTOR(_TIMER_2_VECTOR, IPL4SRS) delay_timer(void){
     IFS0bits.T2IF = 0;
@@ -82,6 +85,7 @@ void __ISR_AT_VECTOR(_TIMER_3_VECTOR, IPL4SRS) speed_timer(void){
     if(speed_counter >= omega){
         speed_counter = 0;
     }
+    
 }
 
 long int mag(long int a){
@@ -93,7 +97,7 @@ void main(){
     int i, j, k;
     int r, g, b;
     unsigned char red, green, blue;
-    double angle, t;
+    double angle;
     float morph_counter = 0;
     init();
     
@@ -106,132 +110,27 @@ void main(){
     
     delay_ms(200);
     SPI_init();
-    SPI2BRG = 5;
+    SPI2BRG = 1;
     delay_ms(200);
     
     for(i = 0; i < LED_LENGTH; i++){
-        buffer[i].red = 255;
-        buffer[i].green = 255;
-        buffer[i].blue = 255;
+        buffer[i] = color_white;
     }
     writeLEDs(buffer);
     delay_ms(50);
-
-    while(1){
+    
+    while(1){        
+        for(i = 0; i < LED_LENGTH; i++){
+            p_buffer[i] = buffer[i];
+        }
+        for(i = 0; i < LED_LENGTH; i++){
+            buffer[i] = color_black;
+        }
+        
+        struct led color[6] = {color_red, color_blue, color_green, color_cyan, color_magenta, color_yellow};
         angle = 360.0 * ((double)magnet_counter)/((double)omega);
+        pie(buffer, color, 6, angle);
         
-        /*if(morph_counter < 256){
-            r = 255;
-            g = morph_counter;
-            b = 0;
-        }
-        else if(morph_counter < 512){
-            r = 255 - (morph_counter - 256);
-            g = 255;
-            b = 0;
-        }
-        else if(morph_counter < 768){
-            r = 0;
-            g = 255;
-            b = morph_counter - 512;
-        }
-        else if(morph_counter < 1024){
-            r = 0;
-            g = 255 - (morph_counter - 768);
-            b = 255;
-        }
-        else if(morph_counter < 1280){
-            r = morph_counter - 1024;
-            g = 0;
-            b = 255;
-        }
-        else{
-            r = 255;
-            g = 0;
-            b = 255 - (morph_counter - 1280);
-        }*/
-        
-        for(i = 0; i < LED_LENGTH; i++){
-            p_buffer[i].red = buffer[i].red;
-            p_buffer[i].green = buffer[i].green;
-            p_buffer[i].blue = buffer[i].blue;
-        }
-        for(i = 0; i < LED_LENGTH; i++){
-            buffer[i].red = 0;
-            buffer[i].green = 0;
-            buffer[i].blue = 0;
-        }
-        if(angle < 90.0){
-            for(i = 0; i < LED_LENGTH / 2; i++){
-                buffer[i].red = 255;
-                buffer[i].green = 255;
-                buffer[i].blue = 0;
-            }
-            //morph_counter += 2;
-            //if(morph_counter >= 1536.0) morph_counter = 0.0;
-        }
-        else if(angle < 180.0){
-            for(i = 0; i < LED_LENGTH / 2; i++){
-                buffer[i].red = 255;
-                buffer[i].green = 0;
-                buffer[i].blue = 255;
-            }
-        }
-        else if(angle < 270){
-            for(i = 0; i < LED_LENGTH / 2; i++){
-                buffer[i].red = 0;
-                buffer[i].green = 255;
-                buffer[i].blue = 255;
-            }
-        }
-        else{
-            for(i = 0; i < LED_LENGTH / 2; i++){
-                buffer[i].red = 0;
-                buffer[i].green = 0;
-                buffer[i].blue = 255;
-            }
-        }
-        angle = angle + 4.5;
-        if(angle > 360.0) angle -= 360.0;
-        
-        if(angle < 90.0){
-            for(i = LED_LENGTH / 2 + 1; i < LED_LENGTH ; i++){
-                buffer[i].red = 0;
-                buffer[i].green = 255;
-                buffer[i].blue = 255;
-            }
-        }
-        else if(angle < 180.0){
-            for(i = LED_LENGTH / 2 + 1; i < LED_LENGTH ; i++){
-                buffer[i].red = 0;
-                buffer[i].green = 0;
-                buffer[i].blue = 255;
-            }
-        }
-        else if(angle < 270){
-            for(i = LED_LENGTH / 2 + 1; i < LED_LENGTH ; i++){
-                buffer[i].red = 255;
-                buffer[i].green = 255;
-                buffer[i].blue = 0;
-            }
-        }
-        else{
-            for(i = LED_LENGTH / 2 + 1; i < LED_LENGTH ; i++){
-                buffer[i].red = 255;
-                buffer[i].green = 0;
-                buffer[i].blue = 255;
-            }
-        }
-        
-        /*else if(angle > 269.0 && angle < 271.0){
-            for(i = LED_LENGTH / 2 + 1; i < LED_LENGTH; i++){
-                buffer[i].red = r;
-                buffer[i].green = g;
-                buffer[i].blue = b;
-            }
-            morph_counter += 2;
-            if(morph_counter >= 1536.0) morph_counter = 0.0;
-        }*/
         for(i = 0; i < (int)LED_LENGTH; i++){
             if(buffer[i].red != p_buffer[i].red || buffer[i].green != p_buffer[i].green || buffer[i].blue != p_buffer[i].blue){
                 buffer_flag = 1;
