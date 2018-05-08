@@ -1,6 +1,8 @@
 #ifndef _SPI_H_
 #define _SPI_H_
 
+#include <xc.h>
+
 void SPI_init(){
     unsigned char data;
     TRISGbits.TRISG6 = 0;

@@ -94,7 +94,7 @@ void main(){
     //timer_init();
     //timer1_init();
     pwm_init();
-    pwm = 200;
+    pwm = 260;
     CCP2CONbits.CCP2X = (pwm >> 1) & 1;
     CCP2CONbits.CCP2Y = pwm & 1;
     CCPR2L = pwm >> 2;
