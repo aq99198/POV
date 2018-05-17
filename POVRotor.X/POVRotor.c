@@ -8,6 +8,7 @@
 #include "LED.h"
 #include "debug.h"
 #include "draw.h"
+#include "animation.h"
 
 #pragma config FNOSC = SPLL 
 #pragma config FSOSCEN = OFF    
@@ -44,18 +45,15 @@ unsigned long int delay_counter = 0;
 
 struct led buffer[LED_LENGTH];
 struct led p_buffer[LED_LENGTH];
-unsigned char buffer_flag = 0;
-int morph_counter = 0;
-int fabulous_counter = 0;
 
 #define speed_history_size 10
 
 unsigned long int speed_history[speed_history_size];
 unsigned int speed_history_i = 0;
-unsigned long int magnet_counter = 0, speed_counter = 0, omega = 0, raw_omega;
+volatile unsigned long int magnet_counter = 0, speed_counter = 0, omega = 0, raw_omega = 0;
 unsigned char magnet_flag = 1;
 
-volatile unsigned long int time = 0.0;
+volatile double time = 0.0;
 
 void __ISR_AT_VECTOR(_TIMER_2_VECTOR, IPL4SRS) delay_timer(void){
     IFS0bits.T2IF = 0;
@@ -86,6 +84,7 @@ void __ISR_AT_VECTOR(_TIMER_3_VECTOR, IPL4SRS) speed_timer(void){
         speed_counter = 0;
     }
     
+    time += 0.00003;
 }
 
 long int mag(long int a){
@@ -95,10 +94,7 @@ long int mag(long int a){
 
 void main(){
     int i, j, k;
-    int r, g, b;
-    unsigned char red, green, blue;
     double angle;
-    float morph_counter = 0;
     init();
     
     TRISDbits.TRISD2 = 1;
@@ -106,18 +102,39 @@ void main(){
         speed_history[i] = 0;
     }
     timer2_init(); 
-    timer3_init(200000);
+    timer3_init(50000);
     
     delay_ms(200);
     SPI_init();
-    SPI2BRG = 1;
+    SPI2BRG = 2;
     delay_ms(200);
     
     for(i = 0; i < LED_LENGTH; i++){
         buffer[i] = color_white;
     }
-    writeLEDs(buffer);
-    delay_ms(50);
+    
+    while(raw_omega < 1024.0){
+        writeLEDs(buffer);
+        delay_ms(50);
+    }
+    
+    
+    struct led color[6] = {color_red, color_blue, color_green, color_cyan, color_magenta, color_yellow};
+    
+    struct led cart_image[144][144];
+    for(i = 0; i < 144; i++){
+        for(j = 0; j < 144; j++){
+            if(ppm[i * 144 * 3 + j * 3] == 0xaa){
+                cart_image[i][j].red = 0xFF;
+                cart_image[i][j].green = 0;
+                cart_image[i][j].blue = 0;
+            } else {
+                cart_image[i][j].red = ppm[i * 144 * 3 + j * 3];
+                cart_image[i][j].green = ppm[i * 144 * 3 + j * 3 + 1];
+                cart_image[i][j].blue = ppm[i * 144 * 3 + j * 3 + 2];
+            }
+        }
+    }
     
     while(1){        
         for(i = 0; i < LED_LENGTH; i++){
@@ -127,19 +144,15 @@ void main(){
             buffer[i] = color_black;
         }
         
-        struct led color[6] = {color_red, color_blue, color_green, color_cyan, color_magenta, color_yellow};
         angle = 360.0 * ((double)magnet_counter)/((double)omega);
-        pie(buffer, color, 6, angle);
-        
-        for(i = 0; i < (int)LED_LENGTH; i++){
-            if(buffer[i].red != p_buffer[i].red || buffer[i].green != p_buffer[i].green || buffer[i].blue != p_buffer[i].blue){
-                buffer_flag = 1;
+        if(time > 360.0) time = 0.0;
+        polar_image(buffer, cart_image, angle);
+        //polar_neg_d(buffer, cosn, d_cosn, color[4], (angle + time * 25));
+        for(i = 0; i < LED_LENGTH; i++){
+            if(buffer[i].red != p_buffer[i].red || buffer[i].green != p_buffer[i].green || buffer[i].blue != p_buffer[i].blue) {
+                writeLEDs(buffer);
                 break;
             }
-        }
-        if(buffer_flag == 1){
-            writeLEDs(buffer);
-            buffer_flag = 0;
         }
     }
 }
